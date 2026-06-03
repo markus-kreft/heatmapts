@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import matplotlib
+from matplotlib.axes import Axes
 from cycler import cycler
 from typing import Optional
 
@@ -12,6 +12,12 @@ from .suntimes import Sun
 
 
 class HeatmapFigure(plt.Figure):
+    """Custom matplotlib Figure subclass for plotting time series heatmaps.
+
+    Provides public attributes (ax_heatmap, ax_daily, ax_hourly, ax_cbar, ax_daily_peak)
+    for easy access and further customization of the individual plot axes.
+    """
+
     COLOR_AXES = "#999999"
     COLOR_SCATTER = "#000000"
     COLOR_SUNTIMES = "#ffffff"
@@ -28,14 +34,16 @@ class HeatmapFigure(plt.Figure):
         "xtick.labelcolor": "black",  # set labels back to black
         "ytick.labelcolor": "black",
         "lines.color": COLOR_AXES,
-        "axes.prop_cycle": cycler('color', ["#999999"]),  # this sets the facecolor for fill_between
+        "axes.prop_cycle": cycler(
+            "color", ["#999999"]
+        ),  # this sets the facecolor for fill_between
     }
 
-    ax_cbar: Optional[matplotlib.axes.Axes] = None
-    ax_heatmap: Optional[matplotlib.axes.Axes] = None
-    ax_daily: Optional[matplotlib.axes.Axes] = None
-    ax_daily_peak: Optional[matplotlib.axes.Axes] = None
-    ax_hourly: Optional[matplotlib.axes.Axes] = None
+    ax_cbar: Axes
+    ax_heatmap: Axes
+    ax_daily: Axes
+    ax_daily_peak: Optional[Axes] = None
+    ax_hourly: Axes
 
     def savefig(self, *args, **kwargs):
         with plt.rc_context(self.rc_params):
@@ -81,26 +89,29 @@ def heatmapfigure(
     # check is series
     if not isinstance(series, pd.Series):
         raise TypeError("series must be a pandas Series")
+    if series.empty:
+        raise ValueError("Series cannot be empty")
     # Check if the index is a datetime index
     if not isinstance(series.index, pd.DatetimeIndex):
         raise ValueError("Series index must be a DatetimeIndex")
+    index: pd.DatetimeIndex = series.index
     # Check if the index is timezone aware
-    if series.index.tz is None:
+    if index.tz is None:
         raise ValueError("Series index must be timezone-aware")
     # Check if the index has a fixed frequency
-    if series.index.freq is None:
+    if index.freq is None:
         raise ValueError("Series index must have a frequency")
     if daily_func not in ["integral", "mean"]:
         raise ValueError("`daily_func` must be either 'integral' or 'mean'")
 
-    interval_minutes = series.index.freq.nanos / 60e9
+    interval_minutes = pd.to_timedelta(index.freq).total_seconds() / 60  # ty: ignore[no-matching-overload]
 
     # Generate the pivoted heatmap and corresponding time and date range
     data, daterange, timerange = _heatmap_data(series)
 
     with plt.rc_context(HeatmapFigure.rc_params):
         # Set up the figure and axes
-        fig: HeatmapFigure = plt.figure(FigureClass=HeatmapFigure, figsize=figsize)  # type: ignore
+        fig: HeatmapFigure = plt.figure(FigureClass=HeatmapFigure, figsize=figsize)  # ty: ignore[invalid-assignment]
         if title is not None:
             fig.suptitle(title)
         gs = fig.add_gridspec(
@@ -120,7 +131,7 @@ def heatmapfigure(
         ax_hourly = fig.add_subplot(gs[1, 1])
         ax_cbar = ax_daily.inset_axes((1.0, 0, 0.035, 1))  # (1.055, 0, 0.035, 1)
 
-        _plot_hists(
+        daily_peak_ax = _plot_hists(
             daterange,
             timerange,
             data,
@@ -137,7 +148,7 @@ def heatmapfigure(
 
         # Add and style the colorbar
         cbar = fig.colorbar(mesh, cax=ax_cbar, label=cbar_label)
-        cbar.outline.set_visible(False)  # type: ignore
+        cbar.outline.set_visible(False)  # ty: ignore[call-non-callable]
         ax_cbar.tick_params(which="both", rotation=0, left=False, labelleft=False)
         ax_cbar.minorticks_on()
         # for t in ax_cbar.get_yticklabels():
@@ -151,38 +162,46 @@ def heatmapfigure(
         fig.ax_heatmap = ax
         fig.ax_daily = ax_daily
         fig.ax_hourly = ax_hourly
-        if daily_max:
-            fig.ax_daily_peak = fig.axes[3]
+        fig.ax_daily_peak = daily_peak_ax
+        if daily_max and daily_peak_ax is not None:
             # equalize y-axis limits of cbar and peak hist
-            fig.ax_daily_peak.set_ylim(ax_cbar.get_ylim())
+            daily_peak_ax.set_ylim(ax_cbar.get_ylim())
 
         return fig
 
 
 def _heatmap_data(
-    series: pd.Series
+    series: pd.Series,
 ) -> tuple[np.ndarray, pd.DatetimeIndex, pd.DatetimeIndex]:
-    """Get [day x hour] matrix and date-/timeranges from series
-    """
+    """Get [day x hour] matrix and date-/timeranges from series"""
+    index = series.index
+    if not isinstance(index, pd.DatetimeIndex):
+        raise ValueError("Series index must be a DatetimeIndex")
 
     # Pad to start and end of day if the series is does not cover a full day
-    if series.index.min().date() == series.index.max().date():
-        new_index = pd.date_range(series.index.min().floor('D'),
-                                  series.index.max().floor('D') + pd.Timedelta(days=1),
-                                  freq=series.index.freq)[:-1]
+    if index.min().date() == index.max().date():
+        new_index = pd.date_range(
+            index.min().floor("D"),
+            index.max().floor("D") + pd.Timedelta(days=1),
+            freq=index.freq,
+        )[:-1]
         series = series.reindex(new_index, fill_value=np.nan)
+        index = series.index
+        if not isinstance(index, pd.DatetimeIndex):
+            raise ValueError("Series index must be a DatetimeIndex")
 
-    timezone = series.index.tz
+    timezone = index.tz
     # Alternative: set date and time as multiindex (drop duplicates) and use unstack
-    df = series.copy().to_frame(name='values')
-    df["date"] = df.index.date
-    df["time"] = df.index.time
+    df = series.copy().to_frame(name="values")
+    df["date"] = index.date
+    df["time"] = index.time
     data = df.pivot_table(
         index="time",
         columns="date",
-        values='values',
+        values="values",
         # in local time there are duplicates, set them to nan
-        aggfunc=lambda x: x if len(x) == 1 else np.nan,
+        aggfunc=lambda x: x.iloc[0] if len(x) == 1 else np.nan,
+        # aggfunc=lambda x: x if len(x) == 1 else np.nan,
         # aggfunc=lambda x: x.iloc[0],
         # aggfunc=lambda x: x.sum(skipna=False),
         dropna=False,
@@ -192,14 +211,16 @@ def _heatmap_data(
     # Add one day to the end because pcolormesh requires edges.  When last date
     # is one with time change backwards, adding one in local time does not add
     # the day. Therefore, use naive timestamps and add timezone explicitly.
-    daterange = pd.date_range(start=daterange.min().tz_localize(None),
-                              end=daterange.max().tz_localize(None) + pd.Timedelta(days=1),
-                              tz=timezone)
+    daterange = pd.date_range(
+        start=daterange.min().tz_localize(None),
+        end=daterange.max().tz_localize(None) + pd.Timedelta(days=1),
+        tz=timezone,
+    )
     # Construct timerange with frequency and timezone information
     timerange = pd.date_range(
         start="1970-01-01T00:00:00",
         end="1970-01-02T00:00:00",
-        freq=f"{series.index.freq.nanos}ns",
+        freq=index.freq,
         tz=timezone,
     )
     # Numpy needs float type with np.nan instead of pf.NA
@@ -207,14 +228,20 @@ def _heatmap_data(
     return data, daterange, timerange
 
 
-def plot_pcolormesh(ax, daterange, timerange, data, **kwargs):
+def plot_pcolormesh(
+    ax: Axes,
+    daterange: pd.DatetimeIndex,
+    timerange: pd.DatetimeIndex,
+    data: np.ndarray,
+    **kwargs,
+):
     """
     Plot the 2D demand profile
     Take a numpy matrix and indices and make a figure with heatmap and sum/avg
     """
 
     mesh = ax.pcolormesh(daterange, timerange, data, **kwargs)
-    ax.set_xlim(daterange[0], daterange[-1])
+    ax.set_xlim(daterange[0], daterange[-1])  # ty: ignore[invalid-argument-type]
     ax.invert_yaxis()
 
     locator = mdates.AutoDateLocator(tz=daterange.tz)
@@ -248,15 +275,18 @@ def _plot_hists(
     daterange: pd.DatetimeIndex,
     timerange: pd.DatetimeIndex,
     data: np.ndarray,
-    ax_daily: matplotlib.axes.Axes,
-    ax_hourly: matplotlib.axes.Axes,
+    ax_daily: Axes,
+    ax_hourly: Axes,
     interval_minutes: float,
     daily_max: bool,
     daily_func: str,
-) -> None:
+) -> Optional[Axes]:
+    """Plot the daily aggregated profile (top axis) and mean profile (right axis)."""
+    twinx = None
     # Daily max
     if daily_max:
-        with warnings.catch_warnings(category=RuntimeWarning, action="ignore"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
             daily_max_draw = np.nanmax(data, axis=0)
             daily_min_draw = np.nanmin(data, axis=0)
             # take max if max larger than abs(min)
@@ -302,7 +332,7 @@ def _plot_hists(
         daily_demand,
         alpha=0.5,
     )
-    ax_daily.set_xlim(daterange[0], daterange[-1])
+    ax_daily.set_xlim(daterange[0], daterange[-1])  # ty: ignore[invalid-argument-type]
     # Need to set the max here as well, else when removing the lower tick (below)
     # the limits get extended, since the ticks have not been rendered yet.
     ax_daily.set_ylim(min(0, daily_demand.min()), daily_demand.max())
@@ -321,7 +351,7 @@ def _plot_hists(
     ax_hourly.set_yticklabels([])
     # If demand is larger than zero, always show from zero, else show from negative demand on
     ax_hourly.set_xlim(min(0, np.nanmean(data, axis=1).min()), None)
-    ax_hourly.set_ylim(timerange[0], timerange[-1])
+    ax_hourly.set_ylim(timerange[0], timerange[-1])  # ty: ignore[invalid-argument-type]
     ax_hourly.invert_yaxis()  # This has to be called after setting lims
 
     # Hide the ticks and labels
@@ -333,11 +363,13 @@ def _plot_hists(
     ax_daily.minorticks_on()
     ax_hourly.minorticks_on()
 
+    return twinx
+
 
 def _annotate_suntimes(
-        ax: matplotlib.axes.Axes,
-        daterange: pd.DatetimeIndex,
-        coords: tuple[float, float],
+    ax: Axes,
+    daterange: pd.DatetimeIndex,
+    coords: tuple[float, float],
 ) -> None:
     """Plots lines for sunrise and sunset times."""
     # Shift daterange by half a day to match the heatmap

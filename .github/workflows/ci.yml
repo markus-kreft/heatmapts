@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      # User perspective: Ignore lockfile and install latest allowed packages
+      - name: Install Latest Dependencies
+        run: uv sync --upgrade
+
+      - name: Run Ruff Check
+        run: uvx ruff check
+
+      - name: Run Ruff Format Check
+        run: uvx ruff format --check
+
+      - name: Run Ty Type Check
+        run: uvx ty check
+
+      - name: Run Tests
+        run: uv run python -m unittest tests/tests.py

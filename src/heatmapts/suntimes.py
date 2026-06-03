@@ -16,6 +16,9 @@ class Sun:
 
     @staticmethod
     def percentday2time(x):
+        """Convert a fractional day float [0.0, 1.0) into a datetime.time object."""
+        # Ensure x is in [0, 1) by wrapping
+        x = x % 1.0
         hours = 24 * x
         h = int(hours)
         minutes = (hours - h) * 60
@@ -25,7 +28,10 @@ class Sun:
         return datetime.time(h, m, s)
 
     @staticmethod
-    def day_time_timezone_from_dateteime(date):
+    def day_time_timezone_from_datetime(
+        date: datetime.datetime,
+    ) -> tuple[int, float, float]:
+        """Convert a datetime into a fractional day and timezone offset (in hours)."""
         # OpenOffice day zero is December 30, 1899
         day = date.toordinal() - datetime.datetime(1899, 12, 30).toordinal()
         t = date.time()
@@ -50,7 +56,7 @@ class Sun:
         Returns:
             tuple: A tuple containing sunrise and sunset times in local time.
         """
-        day, time, timezone = self.day_time_timezone_from_dateteime(date)
+        day, time, timezone = self.day_time_timezone_from_datetime(date)
 
         julian_day = day + 2415018.5 + time - timezone / 24
         julian_century = (julian_day - 2451545) / 36525
@@ -82,14 +88,9 @@ class Sun:
             + (
                 26
                 + (
-                    (
-                        21.448
-                        - julian_century
-                        * (
-                            46.815
-                            + julian_century * (0.00059 - julian_century * 0.001813)
-                        )
-                    )
+                    21.448
+                    - julian_century
+                    * (46.815 + julian_century * (0.00059 - julian_century * 0.001813))
                 )
                 / 60
             )
@@ -116,13 +117,12 @@ class Sun:
             * eccent_earth_orbit
             * sin(2 * radians(geom_mean_anom_sun_deg))
         )
-        ha_sunrise_deg = degrees(
-            acos(
-                cos(radians(90.833))
-                / (cos(radians(self.latitude)) * cos(radians(sun_declin_deg)))
-                - tan(radians(self.latitude)) * tan(radians(sun_declin_deg))
-            )
-        )
+        cos_ha = cos(radians(90.833)) / (
+            cos(radians(self.latitude)) * cos(radians(sun_declin_deg))
+        ) - tan(radians(self.latitude)) * tan(radians(sun_declin_deg))
+        # Clip to avoid ValueError: math domain error at extreme latitudes/seasons
+        cos_ha = max(-1.0, min(1.0, cos_ha))
+        ha_sunrise_deg = degrees(acos(cos_ha))
         solar_noon_lst = (
             720 - 4 * self.longitude - eq_of_time_minutes + timezone * 60
         ) / 1440

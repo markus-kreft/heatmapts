@@ -12,18 +12,18 @@ The figure works best for data with a range of a few months to a few years and a
   <img alt="Sample plot created with HeatmapTS" src="docs/sample-light.png">
 </picture>
 
-<!-- ## Installation -->
+## Installation
 
-<!-- The package is available on [PyPi](): -->
-<!-- ```sh -->
-<!-- pip install heatmapts -->
-<!-- ``` -->
+The package is available on [PyPI](https://pypi.org/project/heatmapts/):
+```sh
+pip install heatmapts
+```
 
-<!-- Alternatively, you can install it from GitHub: -->
-<!-- ```sh -->
-<!-- pip install git+https://github.com/markus-kreft/HeatmapTS -->
-<!-- ``` -->
-<!-- or simply clone this repository and work in the local directory. -->
+Alternatively, you can install it from GitHub:
+```sh
+pip install git+https://github.com/markus-kreft/heatmapts.git
+```
+or simply clone this repository and work in the local directory.
 
 
 ## Usage
