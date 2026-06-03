@@ -1,5 +1,5 @@
 <p align="center" width="100%">
-<img src="docs/logo_wide.png" width="300">
+<img src="https://raw.githubusercontent.com/markus-kreft/heatmapts/main/docs/logo_wide.png" width="300">
 </p>
 
 The classical time series heatmap plot extended with a mean profile and daily average and peaks.
@@ -8,8 +8,8 @@ While I mostly use it for energy data, it can easily be adapted for any other ti
 The figure works best for data with a range of a few months to a few years and a resolution of a few minutes to a few hours.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/sample-dark.png">
-  <img alt="Sample plot created with HeatmapTS" src="docs/sample-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/markus-kreft/heatmapts/main/docs/sample-dark.png">
+  <img alt="Sample plot created with HeatmapTS" src="https://raw.githubusercontent.com/markus-kreft/heatmapts/main/docs/sample-light.png">
 </picture>
 
 ## Installation
