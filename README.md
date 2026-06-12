@@ -64,6 +64,12 @@ The figure is designed for easy customization.
 fig = heatmapfigure(series, annotate_suntimes=(52.37, 4.90))
 ```
 
+- Passing `None` as `daily_label` or `hourly_label` omits the respective daily overview or mean profile subplot.
+
+```python
+fig = heatmapfigure(series, daily_label=None)
+```
+
 - The returned figure is subclassed from `matplotlib.figure.Figure` and features additional attributes for the heatmap, colorbar, daily and hourly axes.
 These can be modified as any other matplotlib axis.
 

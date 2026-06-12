@@ -117,6 +117,49 @@ class TestHeatmap(unittest.TestCase):
         return heatmapfigure(series, rasterized=True, annotate_suntimes=(47.492, 8.555))
 
     @compare_to_baseline
+    def test_sinus_no_daily(self):
+        date_range = pd.date_range(
+            "2020-01-01", "2021-12-31 23:59:59", freq="15min", tz="UTC"
+        )
+        data = date_range.to_series().apply(sinus_pattern)
+        series = pd.Series(index=date_range, data=data)
+        series.index = series.index.tz_convert("Europe/Zurich")  # ty: ignore[unresolved-attribute]
+        return heatmapfigure(
+            series, rasterized=True, daily_label=None, annotate_suntimes=(47.492, 8.555)
+        )
+
+    @compare_to_baseline
+    def test_sinus_no_hourly(self):
+        date_range = pd.date_range(
+            "2020-01-01", "2021-12-31 23:59:59", freq="15min", tz="UTC"
+        )
+        data = date_range.to_series().apply(sinus_pattern)
+        series = pd.Series(index=date_range, data=data)
+        series.index = series.index.tz_convert("Europe/Zurich")  # ty: ignore[unresolved-attribute]
+        return heatmapfigure(
+            series,
+            rasterized=True,
+            hourly_label=None,
+            annotate_suntimes=(47.492, 8.555),
+        )
+
+    @compare_to_baseline
+    def test_sinus_none(self):
+        date_range = pd.date_range(
+            "2020-01-01", "2021-12-31 23:59:59", freq="15min", tz="UTC"
+        )
+        data = date_range.to_series().apply(sinus_pattern)
+        series = pd.Series(index=date_range, data=data)
+        series.index = series.index.tz_convert("Europe/Zurich")  # ty: ignore[unresolved-attribute]
+        return heatmapfigure(
+            series,
+            rasterized=True,
+            daily_label=None,
+            hourly_label=None,
+            annotate_suntimes=(47.492, 8.555),
+        )
+
+    @compare_to_baseline
     def test_resolution_min(self):
         date_range = pd.date_range(
             "2020-01-01", "2020-12-31 23:59:59", freq="60min", tz="UTC"

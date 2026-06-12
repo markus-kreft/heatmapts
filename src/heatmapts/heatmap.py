@@ -41,9 +41,9 @@ class HeatmapFigure(plt.Figure):
 
     ax_cbar: Axes
     ax_heatmap: Axes
-    ax_daily: Axes
+    ax_daily: Optional[Axes] = None
     ax_daily_peak: Optional[Axes] = None
-    ax_hourly: Axes
+    ax_hourly: Optional[Axes] = None
 
     def savefig(self, *args, **kwargs):
         with plt.rc_context(self.rc_params):
@@ -53,8 +53,8 @@ class HeatmapFigure(plt.Figure):
 def heatmapfigure(
     series: pd.Series,
     cbar_label: str = "Power (kW)",
-    daily_label: str = "Energy (kWh)",
-    hourly_label: str = "Profile (kW)",
+    daily_label: Optional[str] = "Energy (kWh)",
+    hourly_label: Optional[str] = "Profile (kW)",
     daily_max: bool = True,
     daily_func: str = "integral",
     title: Optional[str] = None,
@@ -71,8 +71,10 @@ def heatmapfigure(
         cbar_label: Label for the colorbar.
         daily_label: Label for the y-axis of the daily overview. This axis
                      shows the integral of the series values over the day,
-                     i.e., miltiplied by the interval length.
-        hourly_label: Label for the y-axis of the mean profile.
+                     i.e., multiplied by the interval length. Pass None to
+                     omit the daily overview subplot.
+        hourly_label: Label for the y-axis of the mean profile. Pass None to
+                      omit the mean profile subplot.
         daily_max: If True, the daily maximum is plotted as a scatter plot.
         daily_func: Function to use for the daily overview. Can be "integral"
                     for the integral over the day or "mean" for the mean.
@@ -114,22 +116,77 @@ def heatmapfigure(
         fig: HeatmapFigure = plt.figure(FigureClass=HeatmapFigure, figsize=figsize)  # ty: ignore[invalid-assignment]
         if title is not None:
             fig.suptitle(title)
-        gs = fig.add_gridspec(
-            2,
-            2,
-            width_ratios=(7, 1),
-            height_ratios=(2, 8),
-            left=0.1,
-            right=0.9,
-            bottom=0.1,
-            top=0.9,
-            wspace=0.01,
-            hspace=0.01 * (fig.get_figwidth() / fig.get_figheight()),
-        )
-        ax = fig.add_subplot(gs[1, 0])
-        ax_daily = fig.add_subplot(gs[0, 0])
-        ax_hourly = fig.add_subplot(gs[1, 1])
-        ax_cbar = ax_daily.inset_axes((1.0, 0, 0.035, 1))  # (1.055, 0, 0.035, 1)
+        has_daily = daily_label is not None
+        has_hourly = hourly_label is not None
+        cbar_orientation = "vertical"
+
+        if has_daily and has_hourly:
+            gs = fig.add_gridspec(
+                2,
+                2,
+                width_ratios=(7, 1),
+                height_ratios=(2, 8),
+                left=0.1,
+                right=0.9,
+                bottom=0.1,
+                top=0.9,
+                wspace=0.01,
+                hspace=0.01 * (fig.get_figwidth() / fig.get_figheight()),
+            )
+            ax = fig.add_subplot(gs[1, 0])
+            ax_daily = fig.add_subplot(gs[0, 0])
+            ax_hourly = fig.add_subplot(gs[1, 1])
+            ax_cbar = ax_daily.inset_axes((1.0, 0, 0.035, 1))
+        elif not has_daily and has_hourly:
+            gs = fig.add_gridspec(
+                2,
+                2,
+                width_ratios=(7, 1),
+                height_ratios=(0.3, 8),
+                left=0.1,
+                right=0.9,
+                bottom=0.1,
+                top=0.9,
+                wspace=0.01,
+                hspace=0.01 * (fig.get_figwidth() / fig.get_figheight()),
+            )
+            ax = fig.add_subplot(gs[1, 0])
+            ax_hourly = fig.add_subplot(gs[1, 1])
+            ax_cbar = fig.add_subplot(gs[0, 0])
+            cbar_orientation = "horizontal"
+            ax_daily = None
+        elif has_daily and not has_hourly:
+            gs = fig.add_gridspec(
+                2,
+                2,
+                width_ratios=(7, 0.25),
+                height_ratios=(2, 8),
+                left=0.1,
+                right=0.9,
+                bottom=0.1,
+                top=0.9,
+                wspace=0.01,
+                hspace=0.01 * (fig.get_figwidth() / fig.get_figheight()),
+            )
+            ax = fig.add_subplot(gs[1, 0])
+            ax_daily = fig.add_subplot(gs[0, 0])
+            ax_cbar = fig.add_subplot(gs[:, 1])
+            ax_hourly = None
+        else:
+            gs = fig.add_gridspec(
+                1,
+                2,
+                width_ratios=(7, 0.25),
+                left=0.1,
+                right=0.9,
+                bottom=0.1,
+                top=0.9,
+                wspace=0.01,
+            )
+            ax = fig.add_subplot(gs[0, 0])
+            ax_cbar = fig.add_subplot(gs[0, 1])
+            ax_daily = None
+            ax_hourly = None
 
         daily_peak_ax = _plot_hists(
             daterange,
@@ -141,15 +198,37 @@ def heatmapfigure(
             daily_max=daily_max,
             daily_func=daily_func,
         )
-        ax_daily.set_ylabel(daily_label)
-        ax_hourly.set_xlabel(hourly_label)
+        if ax_daily is not None and daily_label is not None:
+            ax_daily.set_ylabel(daily_label)
+        if ax_hourly is not None and hourly_label is not None:
+            ax_hourly.set_xlabel(hourly_label)
 
         mesh = plot_pcolormesh(ax, daterange, timerange, data, **kwargs)
 
         # Add and style the colorbar
-        cbar = fig.colorbar(mesh, cax=ax_cbar, label=cbar_label)
+        cbar = fig.colorbar(
+            mesh, cax=ax_cbar, orientation=cbar_orientation, label=cbar_label
+        )
         cbar.outline.set_visible(False)  # ty: ignore[call-non-callable]
-        ax_cbar.tick_params(which="both", rotation=0, left=False, labelleft=False)
+        if cbar_orientation == "vertical":
+            ax_cbar.tick_params(
+                which="both",
+                rotation=0,
+                left=False,
+                labelleft=False,
+                right=True,
+                labelright=True,
+            )
+        else:
+            ax_cbar.tick_params(
+                which="both",
+                rotation=0,
+                bottom=False,
+                labelbottom=False,
+                top=True,
+                labeltop=True,
+            )
+            ax_cbar.xaxis.set_label_position("top")
         ax_cbar.minorticks_on()
         # for t in ax_cbar.get_yticklabels():
         #     t.set_verticalalignment('center')
@@ -165,6 +244,8 @@ def heatmapfigure(
         fig.ax_daily_peak = daily_peak_ax
         if daily_max and daily_peak_ax is not None:
             # equalize y-axis limits of cbar and peak hist
+            # (daily_peak_ax only exists when ax_daily does, which always
+            # pairs with a vertical colorbar)
             daily_peak_ax.set_ylim(ax_cbar.get_ylim())
 
         return fig
@@ -275,93 +356,99 @@ def _plot_hists(
     daterange: pd.DatetimeIndex,
     timerange: pd.DatetimeIndex,
     data: np.ndarray,
-    ax_daily: Axes,
-    ax_hourly: Axes,
+    ax_daily: Optional[Axes],
+    ax_hourly: Optional[Axes],
     interval_minutes: float,
     daily_max: bool,
     daily_func: str,
 ) -> Optional[Axes]:
     """Plot the daily aggregated profile (top axis) and mean profile (right axis)."""
     twinx = None
-    # Daily max
-    if daily_max:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            daily_max_draw = np.nanmax(data, axis=0)
-            daily_min_draw = np.nanmin(data, axis=0)
-            # take max if max larger than abs(min)
-            daily_peak_draw = np.where(
-                np.abs(daily_max_draw) >= np.abs(daily_min_draw),
-                daily_max_draw,
-                daily_min_draw,
+
+    if ax_daily is not None:
+        # Daily max
+        if daily_max:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                daily_max_draw = np.nanmax(data, axis=0)
+                daily_min_draw = np.nanmin(data, axis=0)
+                # take max if max larger than abs(min)
+                daily_peak_draw = np.where(
+                    np.abs(daily_max_draw) >= np.abs(daily_min_draw),
+                    daily_max_draw,
+                    daily_min_draw,
+                )
+            twinx = ax_daily.twinx()
+            # twinx.set_ylabel("Peak", labelpad=0)
+            twinx.scatter(
+                daterange[:-1] + dt.timedelta(hours=12),
+                daily_peak_draw,
+                color=HeatmapFigure.COLOR_SCATTER,
+                s=1,
+                linewidths=0,
             )
-        twinx = ax_daily.twinx()
-        # twinx.set_ylabel("Peak", labelpad=0)
-        twinx.scatter(
+            twinx.set_ylim(0, None)
+
+            twinx.spines[["top", "left", "bottom"]].set_visible(False)
+
+            # Rotate in case they are long
+            # # does not work in older mpl
+            # # twinx.set_yticks(twinx.get_yticks())
+            # # twinx.set_yticklabels(twinx.get_yticklabels(), rotation=90, va='center')
+            # for t in twinx.get_yticklabels():
+            #     t.set_verticalalignment('center')
+            # remove ticks and labels because we use the ones from the colorbar
+            twinx.set_yticklabels([])
+            twinx.yaxis.set_tick_params(size=0)
+
+            # Add a line at 0 if the min is below zero
+            if np.nanmin(daily_peak_draw) < 0:
+                twinx.axhline(0, color=HeatmapFigure.COLOR_AXES, lw=0.5)
+
+        # Daily sum
+        if daily_func == "integral":
+            daily_demand = np.nansum(data, axis=0) * interval_minutes / 60
+        elif daily_func == "mean":
+            daily_demand = np.nanmean(data, axis=0)
+        ax_daily.fill_between(
             daterange[:-1] + dt.timedelta(hours=12),
-            daily_peak_draw,
-            color=HeatmapFigure.COLOR_SCATTER,
-            s=1,
-            linewidths=0,
+            daily_demand,
+            alpha=0.5,
         )
-        twinx.set_ylim(0, None)
+        ax_daily.set_xlim(daterange[0], daterange[-1])  # ty: ignore[invalid-argument-type]
+        # Need to set the max here as well, else when removing the lower tick (below)
+        # the limits get extended, since the ticks have not been rendered yet.
+        ax_daily.set_ylim(min(0, daily_demand.min()), daily_demand.max())
+        # Remove first label because it may overlap with heat map
+        # ax_histx.yaxis.get_majorticklabels()[0].set_visible(False)
 
-        twinx.spines[["top", "left", "bottom"]].set_visible(False)
+        ax_daily.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
 
-        # Rotate in case they are long
-        # # does not work in older mpl
-        # # twinx.set_yticks(twinx.get_yticks())
-        # # twinx.set_yticklabels(twinx.get_yticklabels(), rotation=90, va='center')
-        # for t in twinx.get_yticklabels():
-        #     t.set_verticalalignment('center')
-        # remove ticks and labels because we use the ones from the coolorbar
-        twinx.set_yticklabels([])
-        twinx.yaxis.set_tick_params(size=0)
+        # Hide the ticks and labels
+        ax_daily.get_xaxis().set_visible(False)
+        # Hide axes frame lines
+        ax_daily.spines[["top", "right", "bottom"]].set_visible(False)
+        ax_daily.minorticks_on()
 
-        # Add a line at 0 if the min is below zero
-        if np.nanmin(daily_peak_draw) < 0:
-            twinx.axhline(0, color=HeatmapFigure.COLOR_AXES, lw=0.5)
+    if ax_hourly is not None:
+        # Mean profile
+        ax_hourly.fill_betweenx(
+            timerange[:-1] + dt.timedelta(minutes=interval_minutes) / 2,
+            np.nanmean(data, axis=1),
+            alpha=0.5,
+        )
+        ax_hourly.set_zorder(
+            -1
+        )  # Draw behind so labels from other axes can be on graph
+        ax_hourly.set_yticklabels([])
+        # If demand is larger than zero, always show from zero, else show from negative demand on
+        ax_hourly.set_xlim(min(0, np.nanmean(data, axis=1).min()), None)
+        ax_hourly.set_ylim(timerange[0], timerange[-1])  # ty: ignore[invalid-argument-type]
+        ax_hourly.invert_yaxis()  # This has to be called after setting lims
 
-    # Daily sum
-    if daily_func == "integral":
-        daily_demand = np.nansum(data, axis=0) * interval_minutes / 60
-    elif daily_func == "mean":
-        daily_demand = np.nanmean(data, axis=0)
-    ax_daily.fill_between(
-        daterange[:-1] + dt.timedelta(hours=12),
-        daily_demand,
-        alpha=0.5,
-    )
-    ax_daily.set_xlim(daterange[0], daterange[-1])  # ty: ignore[invalid-argument-type]
-    # Need to set the max here as well, else when removing the lower tick (below)
-    # the limits get extended, since the ticks have not been rendered yet.
-    ax_daily.set_ylim(min(0, daily_demand.min()), daily_demand.max())
-    # Remove first label because it may overlap with heat map
-    # ax_histx.yaxis.get_majorticklabels()[0].set_visible(False)
-
-    ax_daily.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
-
-    # Mean profile
-    ax_hourly.fill_betweenx(
-        timerange[:-1] + dt.timedelta(minutes=interval_minutes) / 2,
-        np.nanmean(data, axis=1),
-        alpha=0.5,
-    )
-    ax_hourly.set_zorder(-1)  # Draw behind so labels from other axes can be on graph
-    ax_hourly.set_yticklabels([])
-    # If demand is larger than zero, always show from zero, else show from negative demand on
-    ax_hourly.set_xlim(min(0, np.nanmean(data, axis=1).min()), None)
-    ax_hourly.set_ylim(timerange[0], timerange[-1])  # ty: ignore[invalid-argument-type]
-    ax_hourly.invert_yaxis()  # This has to be called after setting lims
-
-    # Hide the ticks and labels
-    ax_daily.get_xaxis().set_visible(False)
-    ax_hourly.get_yaxis().set_visible(False)
-    # Hide axes frame lines
-    ax_daily.spines[["top", "right", "bottom"]].set_visible(False)
-    ax_hourly.spines[["top", "right", "left"]].set_visible(False)
-    ax_daily.minorticks_on()
-    ax_hourly.minorticks_on()
+        ax_hourly.get_yaxis().set_visible(False)
+        ax_hourly.spines[["top", "right", "left"]].set_visible(False)
+        ax_hourly.minorticks_on()
 
     return twinx
 
@@ -388,7 +475,7 @@ def _annotate_suntimes(
         axis="columns",
         result_type="expand",
     )
-    # Suntimes are calcualted in the local timezone and need to be localized
+    # Suntimes are calculated in the local timezone and need to be localized
     times["sunset"] = times["sunset"].dt.tz_localize(daterange.tz)
     times["sunrise"] = times["sunrise"].dt.tz_localize(daterange.tz)
 

@@ -1,6 +1,6 @@
 [project]
 name = "heatmapts"
-version = "0.1.1"
+version = "0.1.2"
 description = "The classical time series heatmap plot extended with a mean profile and daily average and peaks."
 readme = "README.md"
 authors = [
