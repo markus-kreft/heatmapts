@@ -7,8 +7,17 @@ on:
     branches: [ main ]
 
 jobs:
+  # Reproducible, locked test run (the required gate).
   test:
+    uses: ./.github/workflows/test.yml
+
+  # Compatibility smoke test from a user's perspective: installs the latest
+  # allowed dependencies and only checks that every figure builds without
+  # error (image comparison is skipped via HEATMAPTS_SMOKE). Non-blocking, so
+  # cosmetic rendering differences don't fail CI but real breakage surfaces.
+  compat:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
 
@@ -17,18 +26,10 @@ jobs:
         with:
           enable-cache: true
 
-      # User perspective: Ignore lockfile and install latest allowed packages
       - name: Install Latest Dependencies
         run: uv sync --upgrade
 
-      - name: Run Ruff Check
-        run: uvx ruff check
-
-      - name: Run Ruff Format Check
-        run: uvx ruff format --check
-
-      - name: Run Ty Type Check
-        run: uvx ty check
-
-      - name: Run Tests
+      - name: Run Smoke Tests
+        env:
+          HEATMAPTS_SMOKE: "1"
         run: uv run python -m unittest tests/tests.py

@@ -31,6 +31,13 @@ def compare_to_baseline(func, tol=1, file_format=".png", dpi=500):
         if out is not None:
             out.savefig(f"{PATH_TEST_OUTPUT}/{filename}", dpi=dpi)
 
+        # Smoke mode (used when testing against the latest, unlocked
+        # dependencies): only verify the figure builds and saves. The
+        # pixel-exact comparison is skipped because the rendered image size
+        # depends on the exact matplotlib/freetype version.
+        if os.environ.get("HEATMAPTS_SMOKE"):
+            return
+
         result = compare_images(
             f"{PATH_BASELINE_IMAGES}/{filename}",
             f"{PATH_TEST_OUTPUT}/{filename}",
