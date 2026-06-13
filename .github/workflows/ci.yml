@@ -39,3 +39,52 @@ jobs:
         env:
           HEATMAPTS_SMOKE: "1"
         run: uv run python -m unittest tests/tests.py
+
+  # Python version coverage (Linux only): verifies the whole supported range
+  # from requires-python (>=3.9) builds every figure against the latest allowed
+  # dependencies. Runtime deps only (--no-dev) to mirror an end-user install.
+  # Smoke mode and non-blocking, like compat.
+  python-versions:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.14"]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Latest Dependencies
+        run: uv sync --upgrade --no-dev --python ${{ matrix.python-version }}
+
+      - name: Run Smoke Tests
+        env:
+          HEATMAPTS_SMOKE: "1"
+        run: uv run --no-sync python -m unittest tests/tests.py
+
+  # Dependency floor (Linux only): resolves the lowest direct dependency
+  # versions allowed by pyproject (pandas, matplotlib) on the minimum Python,
+  # to verify the declared minimums actually work. Blocking, since these are
+  # correctness claims we control (unlike the latest-version smoke jobs).
+  dependency-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Lowest Direct Dependencies
+        run: uv sync --resolution lowest-direct --no-dev --python 3.9
+
+      - name: Run Smoke Tests
+        env:
+          HEATMAPTS_SMOKE: "1"
+        run: uv run --no-sync python -m unittest tests/tests.py
