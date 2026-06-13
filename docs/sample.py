@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from heatmapts import heatmapfigure, HeatmapFigure
 import matplotlib.dates as mdates
@@ -20,27 +21,33 @@ THEMES = [
 ]
 
 
-def download_and_convert(year, filename_csv):
-    """Download Excel file and convert relevant columns to csv.
+def load_year(year, filename_csv, force=False):
+    """Load the Swissgrid consumption series for a given year.
+
+    The source Excel file is downloaded from Swissgrid and the relevant
+    columns are converted to a small csv that is cached at ``filename_csv``.
+    Subsequent calls reuse that cache so the (large) download only happens
+    once -- and a local copy is kept in case the data source ever disappears.
+    Pass ``force=True`` to re-download and refresh the cache.
     https://www.swissgrid.ch/en/home/customers/topics/energy-data-ch.html
     """
-    url = f"https://www.swissgrid.ch/content/dam/dataimport/energy-statistic/EnergieUebersichtCH-{year}.xlsx"
-    columns = {
-        "Unnamed: 0": "timestamp",
-        "Summe endverbrauchte Energie Regelblock Schweiz\n"
-        "Total energy consumed by end users in the Swiss controlblock": "total_energy_consumed",
-        "Summe produzierte Energie Regelblock Schweiz\n"
-        "Total energy production Swiss controlblock": "total_energy_produced",
-    }
+    if force or not os.path.exists(filename_csv):
+        url = f"https://www.swissgrid.ch/content/dam/dataimport/energy-statistic/EnergieUebersichtCH-{year}.xlsx"
+        columns = {
+            "Unnamed: 0": "timestamp",
+            "Summe endverbrauchte Energie Regelblock Schweiz\n"
+            "Total energy consumed by end users in the Swiss controlblock": "total_energy_consumed",
+            "Summe produzierte Energie Regelblock Schweiz\n"
+            "Total energy production Swiss controlblock": "total_energy_produced",
+        }
+        df = pd.read_excel(
+            url, sheet_name="Zeitreihen0h15", usecols=list(columns.keys())
+        )
+        df = df.loc[1:]
+        df.rename(columns=columns, inplace=True)
+        df.to_csv(filename_csv, index=False)
 
-    df = pd.read_excel(url, sheet_name="Zeitreihen0h15", usecols=list(columns.keys()))
-    df = df.loc[1:]
-    df.rename(columns=columns, inplace=True)
-    df.to_csv(filename_csv, index=False)
-
-
-def load_csv(filename):
-    df = pd.read_csv(filename)
+    df = pd.read_csv(filename_csv)
     df["timestamp"] = pd.to_datetime(df["timestamp"], format="%d.%m.%Y %H:%M")
     df.set_index("timestamp", inplace=True)
     df.index = df.index.tz_localize(  # ty: ignore[unresolved-attribute]
@@ -85,10 +92,9 @@ def plot_theme(theme, *args, **kwargs):
 
 
 if __name__ == "__main__":
-    # download_and_convert(2023, "docs/2023.csv")
-    # download_and_convert(2024, "docs/2024.csv")
-    series1 = load_csv("docs/2023.csv")
-    series2 = load_csv("docs/2024.csv")
+    # Downloads on first run and caches to csv; pass force=True to refresh.
+    series1 = load_year(2023, "docs/2023.csv")
+    series2 = load_year(2024, "docs/2024.csv")
     series = pd.concat([series1, series2], axis=0)
     for theme in THEMES:
         fig = plot_theme(
