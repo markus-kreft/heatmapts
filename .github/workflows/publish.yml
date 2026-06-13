@@ -6,8 +6,13 @@ on:
       - 'v*'
 
 jobs:
+  # Reproducible tests need to pass before publishing.
+  test:
+    uses: ./.github/workflows/test.yml
+
   publish:
     name: Build and publish Python distribution
+    needs: test
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -23,6 +28,16 @@ jobs:
         uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
+
+      - name: Verify tag matches package version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(uv version --short)"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' (version '$tag_version') does not match pyproject version '$pkg_version'"
+            exit 1
+          fi
+          echo "Tag matches package version: $pkg_version"
 
       - name: Build package
         run: uv build
