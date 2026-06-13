@@ -30,17 +30,18 @@ or simply clone this repository and work in the local directory.
 
 The module provides the `heatmapfigure` function that takes a pandas Series with a timezone-aware DatetimeIndex with frequency.
 
-This example show how to load and prepare data from a csv file in the necessary way.
+This example shows how to load and prepare data from a csv file in the necessary way.
 This needs to be adapted depending on the format of the data at hand.
 
 ```python
+import pandas as pd
 from heatmapts import heatmapfigure
 
 # Read data
 df = pd.read_csv('data.csv', index_col='Timestamp')
 # Convert index to datetime and set timezone
 df.index = pd.to_datetime(df.index, format='%Y-%m-%d %H:%M:%S').tz_convert('Europe/Zurich')
-# Resample to 15 frequency
+# Resample to 15min frequency
 df = df.asfreq("15min", fill_value=pd.NA)
 # Take data column and convert energy to power
 series = df['Value'] * 4
