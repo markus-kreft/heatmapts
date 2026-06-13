@@ -13,10 +13,16 @@ jobs:
 
   # Compatibility smoke test from a user's perspective: installs the latest
   # allowed dependencies and only checks that every figure builds without
-  # error (image comparison is skipped via HEATMAPTS_SMOKE). Non-blocking, so
-  # cosmetic rendering differences don't fail CI but real breakage surfaces.
+  # error (image comparison is skipped via HEATMAPTS_SMOKE, since freetype
+  # renders glyphs differently per OS). Runs across Linux/macOS/Windows to
+  # catch platform-specific breakage. Non-blocking, so cosmetic rendering
+  # differences don't fail CI but real breakage surfaces.
   compat:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v6
