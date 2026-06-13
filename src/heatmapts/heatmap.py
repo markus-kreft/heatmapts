@@ -203,7 +203,7 @@ def heatmapfigure(
         if ax_hourly is not None and hourly_label is not None:
             ax_hourly.set_xlabel(hourly_label)
 
-        mesh = plot_pcolormesh(ax, daterange, timerange, data, **kwargs)
+        mesh = _plot_pcolormesh(ax, daterange, timerange, data, **kwargs)
 
         # Add and style the colorbar
         cbar = fig.colorbar(
@@ -259,7 +259,7 @@ def _heatmap_data(
     if not isinstance(index, pd.DatetimeIndex):
         raise ValueError("Series index must be a DatetimeIndex")
 
-    # Pad to start and end of day if the series is does not cover a full day
+    # Pad to start and end of day if the series does not cover a full day
     if index.min().date() == index.max().date():
         new_index = pd.date_range(
             index.min().floor("D"),
@@ -309,7 +309,7 @@ def _heatmap_data(
     return data, daterange, timerange
 
 
-def plot_pcolormesh(
+def _plot_pcolormesh(
     ax: Axes,
     daterange: pd.DatetimeIndex,
     timerange: pd.DatetimeIndex,
@@ -387,7 +387,8 @@ def _plot_hists(
                 s=1,
                 linewidths=0,
             )
-            twinx.set_ylim(0, None)
+            # Note: the y-limits are set in `heatmapfigure` to match the
+            # colorbar, so the peak scatter shares the colorbar's scale.
 
             twinx.spines[["top", "left", "bottom"]].set_visible(False)
 
@@ -410,6 +411,8 @@ def _plot_hists(
             daily_demand = np.nansum(data, axis=0) * interval_minutes / 60
         elif daily_func == "mean":
             daily_demand = np.nanmean(data, axis=0)
+        else:
+            raise ValueError("`daily_func` must be either 'integral' or 'mean'")
         ax_daily.fill_between(
             daterange[:-1] + dt.timedelta(hours=12),
             daily_demand,
