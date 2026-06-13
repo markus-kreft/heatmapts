@@ -91,11 +91,18 @@ def plot_theme(theme, *args, **kwargs):
     return fig
 
 
-if __name__ == "__main__":
-    # Downloads on first run and caches to csv; pass force=True to refresh.
-    series1 = load_year(2023, "docs/2023.csv")
-    series2 = load_year(2024, "docs/2024.csv")
+def generate_sample_figures(data_dir="docs", out_dir="docs", force=False):
+    """Build the documentation sample images from real Swissgrid data.
+
+    Loads the 2023 and 2024 consumption series (downloading and caching them
+    under ``data_dir`` on first use, see ``load_year``), renders both themes
+    and writes ``sample-{theme}.png`` into ``out_dir``. Returns the list of
+    written image paths.
+    """
+    series1 = load_year(2023, os.path.join(data_dir, "2023.csv"), force=force)
+    series2 = load_year(2024, os.path.join(data_dir, "2024.csv"), force=force)
     series = pd.concat([series1, series2], axis=0)
+    paths = []
     for theme in THEMES:
         fig = plot_theme(
             theme,
@@ -115,4 +122,11 @@ if __name__ == "__main__":
             fontsize=6,
             color="#aaaaaa",
         )
-        fig.savefig(f"docs/sample-{theme['name']}.png", dpi=500)
+        path = os.path.join(out_dir, f"sample-{theme['name']}.png")
+        fig.savefig(path, dpi=500)
+        paths.append(path)
+    return paths
+
+
+if __name__ == "__main__":
+    generate_sample_figures()
